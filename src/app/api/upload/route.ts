@@ -1,49 +1,59 @@
+//https://www.youtube.com/watch?v=_Xkdn1QpPG0&t=1768s
 import { NextResponse } from "next/server";
-import { writeFile } from "fs/promises";
-import { v2 as cloudinary } from "cloudinary";
-import path from "path";
+import { v2 as cloudinary, UploadApiResponse } from "cloudinary";
 
 // Configuration
 cloudinary.config({
   cloud_name: "deimspwc6",
   api_key: "597296641252981",
-  api_secret: "hV-zb_wBxhTvjhk3KPoJhTBs15E", // Click 'View API Keys' above to copy your API secret
+  api_secret: "hV-zb_wBxhTvjhk3KPoJhTBs15E",
 });
 
+//"Handler for POST requests (image upload)."
 export async function POST(request: Request) {
-  const data = await request.formData();
-  const image = data.get("file");
+  try {
+    //Extracts the form data sent in the request.
+    const data = await request.formData();
+    const file = data.get("file");
 
-  //console.dir(data,{depth:null});
-  if (!image) {
-    return NextResponse.json("no se ha subido ninguna imagen", { status: 400 });
-  }
-  if (image) {
-    //console.log("deberia funcionar ");
-    //console.log(data.get("file"));
-  }
-  if (image instanceof File) {
-    console.log("deberia funcionar 2");
-    const bytes = await image.arrayBuffer();
+    //"Validates that a file has been provided and that it is a valid instance of File."
+    if (!file || !(file instanceof File)) {
+      return NextResponse.json("No valid image file provided.", {
+        status: 400,
+      });
+    }
+
+    // Converts the file into a byte buffer so it can be processed by Cloudinary.
+    const bytes = await file.arrayBuffer();
     const buffer = Buffer.from(bytes);
 
-    /*const filePath = path.join(process.cwd(), "public", image.name);
-    await writeFile(filePath, buffer);*/
-
-    const response = await new Promise((resolve, reject) => {
+    // Uploads the image to Cloudinary using upload_stream and a Promise to await the result.
+    const response = await new Promise<UploadApiResponse>((resolve, reject) => {
       cloudinary.uploader
         .upload_stream({}, (err, resul) => {
-          if (err) {
+          // Error handling: if there's an error or the response is undefined, the promise is rejected.
+          if (err || !resul) {
             reject(err);
           }
-          resolve(resul);
+          // If there is a valid response, the promise is resolved with the response.
+          if (resul) {
+            resolve(resul);
+          }
         })
+        // Ends the stream by sending the buffer.
         .end(buffer);
     });
-    console.log(response);
+    // Returns a JSON response with the message and the secure URL of the uploaded image.
     return NextResponse.json({
-      message: "imagen subida",
+      message: "Image uploaded.",
       url: response.secure_url,
     });
+  } catch (error) {
+    // Global error handling: logs the error to the console and responds with a 500 error.
+    console.error("Error uploading image to Cloudinary.:", error);
+    return NextResponse.json(
+      { error: "Internal server error." },
+      { status: 500 }
+    );
   }
 }
